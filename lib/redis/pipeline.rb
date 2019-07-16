@@ -33,10 +33,14 @@ class Redis
     end
 
     def call(command, timeout: nil, &block)
+      future = Future.new(command, block, timeout)
+      call_future(future)
+    end
+
+    def call_future(future)
       # A pipeline that contains a shutdown should not raise ECONNRESET when
       # the connection is gone.
-      @shutdown = true if command.first == :shutdown
-      future = Future.new(command, block, timeout)
+      @shutdown = true if future._command.first == :shutdown
       @futures << future
       future
     end

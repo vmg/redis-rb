@@ -78,10 +78,19 @@ class Redis
     end
 
     def call_pipeline(pipeline)
-      node_keys, command_keys = extract_keys_in_pipeline(pipeline)
-      raise CrossSlotPipeliningError, command_keys if node_keys.size > 1
-      node = find_node(node_keys.first)
-      try_send(node, :call_pipeline, pipeline)
+      if pipeline.is_a? Redis::Pipeline::Multi
+        node_keys, command_keys = extract_keys_in_pipeline(pipeline)
+        raise CrossSlotPipeliningError, command_keys if node_keys.size > 1
+        node = find_node(node_keys.first)
+        try_send(node, :call_pipeline, pipeline)
+      else
+        result = []
+        split_pipeline(pipeline).each do |node_key, pipeline|
+          node = find_node(node_key)
+          result.concat(try_send(node, :call_pipeline, pipeline))
+        end
+        result
+      end
     end
 
     def call_with_timeout(command, timeout, &block)
@@ -281,6 +290,21 @@ class Redis
       node_keys = pipeline.commands.map { |cmd| find_node_key(cmd) }.compact.uniq
       command_keys = pipeline.commands.map { |cmd| @command.extract_first_key(cmd) }.reject(&:empty?)
       [node_keys, command_keys]
+    end
+
+    def split_pipeline(pipeline)
+      shards = {}
+
+      pipeline.futures.each do |fut|
+        node = find_node_key(fut._command)
+        if node
+          shards[node] ||= Redis::Pipeline.new(pipeline)
+          shards[node].call_future(fut)
+          $stderr.puts "#{fut.inspect} -> #{node}"
+        end
+      end
+
+      shards
     end
   end
 end

@@ -38,22 +38,33 @@ class TestClusterClientPipelining < Minitest::Test
   end
 
   def test_pipelining_without_hash_tags
-    assert_raises(Redis::Cluster::CrossSlotPipeliningError) do
-      redis.pipelined do
-        redis.set(:a, 1)
-        redis.set(:b, 2)
-        redis.set(:c, 3)
-        redis.set(:d, 4)
-        redis.set(:e, 5)
-        redis.set(:f, 6)
+    p1 = p2 = p3 = p4 = p5 = p6 = nil
 
-        redis.get(:a)
-        redis.get(:b)
-        redis.get(:c)
-        redis.get(:d)
-        redis.get(:e)
-        redis.get(:f)
-      end
+    redis.pipelined do
+      redis.set(:a, '1')
+      redis.set(:b, '2')
+      redis.set(:c, '3')
+      redis.set(:d, '4')
+      redis.set(:e, '5')
+      redis.set(:f, '6')
+
+      p1 = redis.get(:a)
+      p2 = redis.get(:b)
+      p3 = redis.get(:c)
+      p4 = redis.get(:d)
+      p5 = redis.get(:e)
+      p6 = redis.get(:f)
     end
+
+    [p1, p2, p3, p4, p5, p6].each do |actual|
+      assert_equal true, actual.is_a?(Redis::Future)
+    end
+
+    assert_equal('1', p1.value)
+    assert_equal('2', p2.value)
+    assert_equal('3', p3.value)
+    assert_equal('4', p4.value)
+    assert_equal('5', p5.value)
+    assert_equal('6', p6.value)
   end
 end
